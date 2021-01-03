@@ -1,0 +1,20 @@
+[package]
+name = "s0laserlog"
+version = "0.1.0"
+authors = ["Kenakapheus <lukas@kenakapheus.org>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rocket = {version = "0.4.6", features = ["sse"] }
+toml = "0.5"
+
+serde = {version = "1.0.118", features = ["derive"] }
+
+chrono = "0.4.19"
+
+[dependencies.rocket_contrib]
+version = "0.4.6"
+default-features = false
+features = ["handlebars_templates"]
