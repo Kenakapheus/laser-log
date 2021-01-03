@@ -31,6 +31,8 @@
             <p><b> Laserzeit: {{time}}</b></p>
             <p><b> Nutzer: {{user}}</b></p>
             <form action="/entry/new" method="post">
+            <input type="hidden" name="user" value="{{user}}" />
+            <input type="hidden" name="timestamp" value="{{timestamp}}" />
             <p><b> Material: <select name="material">
                 {{#each materials}}<option value="{{@key}}">{{this.name}}{{#if this.fullname}} - {{this.fullname}}{{/if}}</option>{{/each}}
             </select> <a href="/mat/new" id="new_link">Neues Material Anlegen</a></b></p>

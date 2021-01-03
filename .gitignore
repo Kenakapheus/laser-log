@@ -1,1 +1,4 @@
 /target
+Cargo.lock
+materials.toml
+log.toml
