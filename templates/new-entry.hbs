@@ -23,6 +23,23 @@
             font-size: 80%;
         }
     </style>
+    <script>
+        function fetchFile(path, callback)
+        {
+            var httpRequest = new XMLHttpRequest();
+            httpRequest.onreadystatechange = function() {
+                if (httpRequest.readyState === 4) {
+                    if (httpRequest.status === 200) {
+                        if (callback) callback(httpRequest.responseText);
+                    }
+                }
+            };
+            
+            httpRequest.open('GET', path);
+            httpRequest.send(); 
+        }
+
+    </script>
     <body>
         <div class="center">
             <div id="title">
@@ -43,5 +60,8 @@
             <input type="submit" id="submit" value="Eintragen">
             </form>
         </div>
+        <script>
+            setInterval(fetchFile, 1000, "/login", function status(res) {if (res == "false") {window.location.replace("/");}})
+        </script>
     </body>
 </html>

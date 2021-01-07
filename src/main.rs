@@ -1,28 +1,37 @@
 #![feature(proc_macro_hygiene, decl_macro)]
 
-use std::fmt::Debug;
+use std::{cell::RefCell, fmt::Debug, sync::{Mutex, atomic::AtomicBool}};
 use serde::{Serialize, Deserialize};
 use rocket_contrib::templates::Template;
 use rocket::request::Form;
 use rocket::response::Redirect;
+use rocket::State;
 use std::collections::HashMap;
 use std::vec::Vec;
 use std::string::String;
 use std::fs;
 use chrono::{NaiveDateTime, Local};
-use regex::Regex;
 use std::io::prelude::*;
+use slug::slugify;
 
 
-#[macro_use] extern crate rocket;
-#[macro_use] extern crate lazy_static;
 
-lazy_static! {
-    static ref SLUG_RE: Regex = Regex::new(r"([a-z0-9_]+)").unwrap();
+
+#[macro_use] extern crate rocket
+
+;
+struct LoginState {
+    user: Mutex<RefCell<String>>,
+    unlocked: AtomicBool,
+}
+
+
+#[derive(Serialize, Debug)]
+struct EmptyTemplate {
 }
 
 #[derive(Serialize, Debug)]
-struct IndexTemplate {
+struct EntryTemplate {
     time: String,
     timestamp: i64,
     user: String,
@@ -77,17 +86,23 @@ struct EntryForm {
     comment: String,
 }
 
+#[derive(Serialize, FromForm, Debug)]
+struct LoginForm {
+    username: String,
+    token: Option<String>,
+}
+
 #[get("/new")]
-fn new_entry() -> Template {
+fn new_entry(login_state: State<LoginState>) -> Template {
     let material_db: MaterialDatabase = match fs::read_to_string("materials.toml") {
         Err(_) => {MaterialDatabase {materials: HashMap::new()}}
         Ok(materials) => {toml::from_str(materials.as_str()).expect("Could not parse meta.toml")}
     };
     let now = Local::now();
-    let context = IndexTemplate {
+    let context = EntryTemplate {
         time: now.format("%d.%m.%Y %H:%M").to_string(),
         timestamp: now.timestamp(),
-        user: "Annonym".to_string(),
+        user: login_state.user.lock().unwrap().borrow().clone(),
         materials: material_db.materials,
     };
     Template::render("new-entry", context)
@@ -112,7 +127,7 @@ fn post_entry(input: Form<EntryForm>) -> Redirect {
         thickness: input.thickness,
         comment: input.comment.clone(),
     };
-    let slug = to_slug(&format!("{}_{}", input.user, input.timestamp));
+    let slug = slugify(&format!("{}_{}", input.user, input.timestamp));
     let mut entrys = HashMap::new();
     entrys.insert(slug, entry);
     match toml::to_string(&entrys) {
@@ -139,7 +154,7 @@ fn post_mat(input: Form<MaterialForm>) -> Redirect {
         name: input.name.clone(),
         fullname: match input.fullname.as_str() {"" => None, s => Some(s.to_string())},
     };
-    let slug = to_slug(&input.name);
+    let slug = slugify(&input.name);
     let mut materials = HashMap::new();
     materials.insert(slug, material);
     match toml::to_string(&MaterialDatabase{materials}) {
@@ -154,18 +169,41 @@ fn post_mat(input: Form<MaterialForm>) -> Redirect {
     Redirect::to("/entry/new")
 }
 
-fn to_slug(input: &String) -> String {
-            let mut slug = String::new();
-            for cap in SLUG_RE.captures_iter(input.to_lowercase().as_str()) {
-                slug.push_str(&cap[1]);
-            }
-            slug
+#[post("/unlock", data = "<input>")]
+fn post_login(login_state: State<LoginState> ,input: Form<LoginForm>) -> Redirect {
+    login_state.user.lock().unwrap().replace(input.username.clone());
+    login_state.unlocked.store(true, std::sync::atomic::Ordering::Relaxed);
+    Redirect::to("/entry/new")
+}
+
+#[post("/lock")]
+fn post_logout(login_state: State<LoginState>) -> Redirect {
+    login_state.user.lock().unwrap().replace(String::new());
+    login_state.unlocked.store(false, std::sync::atomic::Ordering::Relaxed);
+    Redirect::to("/")
+}
+
+#[get("/")]
+fn get_login(login_state: State<LoginState>) -> String {
+    return login_state.unlocked.load(std::sync::atomic::Ordering::Relaxed).to_string();
+}
+
+#[get("/")]
+fn landing() -> Template {
+    Template::render("landing", EmptyTemplate {})
 }
 
 fn main() {
+    let login_state = LoginState {
+        user: Mutex::new(RefCell::new(String::new())),
+        unlocked: AtomicBool::new(false),
+    };
     rocket::ignite()
         .attach(Template::fairing())
+        .mount("/login", routes![post_login, post_logout, get_login])
         .mount("/mat", routes![new_mat, post_mat])
         .mount("/entry", routes![new_entry, post_entry])
+        .mount("/", routes![landing])
+        .manage(login_state)
         .launch();
 }
