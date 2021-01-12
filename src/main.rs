@@ -21,7 +21,9 @@ use slug::slugify;
 
 ;
 struct LoginState {
+    /// Aktuell angemeldeter Nutzer
     user: Mutex<RefCell<String>>,
+    /// Flag für Loginstatus
     unlocked: AtomicBool,
 }
 
@@ -38,9 +40,7 @@ struct EntryTemplate {
     materials: HashMap<String, Material>,
 }
 
-#[derive(Serialize, Debug)]
-struct MaterialTemplate {
-}
+
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Material {
@@ -57,16 +57,6 @@ struct LogMaterial {
 
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-struct MaterialDatabase {
-    materials: HashMap<String, Material>,
-}
-
-#[derive(Serialize, FromForm, Debug)]
-struct MaterialForm {
-    name: String,
-    fullname: String,
-}
 
 #[derive(Serialize, Debug)]
 struct Entry {
@@ -86,11 +76,7 @@ struct EntryForm {
     comment: String,
 }
 
-#[derive(Serialize, FromForm, Debug)]
-struct LoginForm {
-    username: String,
-    token: Option<String>,
-}
+
 
 #[get("/new")]
 fn new_entry(login_state: State<LoginState>) -> Template {
@@ -142,6 +128,22 @@ fn post_entry(input: Form<EntryForm>) -> Redirect {
     Redirect::to("/entry/new")
 }
 
+
+#[derive(Serialize, Debug)]
+struct MaterialTemplate {
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct MaterialDatabase {
+    materials: HashMap<String, Material>,
+}
+
+#[derive(Serialize, FromForm, Debug)]
+struct MaterialForm {
+    name: String,
+    fullname: String,
+}
+
 #[get("/new")]
 fn new_mat() -> Template {
     let context = MaterialTemplate {};
@@ -169,6 +171,17 @@ fn post_mat(input: Form<MaterialForm>) -> Redirect {
     Redirect::to("/entry/new")
 }
 
+/**
+Parameter für das Login API und eventuell später eine HTML Form
+ */
+#[derive(Serialize, FromForm, Debug)]
+struct LoginForm {
+    /// Name des Nutzers
+    username: String,
+    /// Auth Token für API Clients (NYI)
+    token: Option<String>,
+}
+
 #[post("/unlock", data = "<input>")]
 fn post_login(login_state: State<LoginState> ,input: Form<LoginForm>) -> Redirect {
     login_state.user.lock().unwrap().replace(input.username.clone());
@@ -183,6 +196,10 @@ fn post_logout(login_state: State<LoginState>) -> Redirect {
     Redirect::to("/")
 }
 
+/**
+Die Landingpage soll automatisch auf die Eingabemaske umschalten sobalt ein Nutzer Autentifiziert ist,
+dafür wird per XHR 1/s der '/login' enpoint abgefragt.
+*/
 #[get("/")]
 fn get_login(login_state: State<LoginState>) -> String {
     return login_state.unlocked.load(std::sync::atomic::Ordering::Relaxed).to_string();
